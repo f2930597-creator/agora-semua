@@ -46,6 +46,17 @@
   <div class="warn"><strong>Jujur dulu:</strong> panggilan / siaran hanya bisa dimulai kalau token server sudah dikonfigurasi dengan App ID + Sertifikat Agora kamu di server (environment variable, bukan di chat, bukan di file ini). Kalau belum, halaman ini akan menampilkan <strong>“token server belum dikonfigurasi”</strong> dan tidak akan menampilkan panggilan palsu. Untuk <strong>AI Percakapan</strong>, agen AI yang benar-benar bisa bicara butuh LLM + TTS/STT tambahan di luar Agora RTC — di versi ini AI membalas lewat teks (kalau kunci LLM sudah diisi di server) dan dibacakan oleh suara browser di HP kamu, jadi statusnya terlihat jelas di bawah.</div>
 
   <section>
+    <h2 style="margin:0 0 4px">Pengaturan Agora — samakan namanya dengan Agora Console</h2>
+    <p class="note">Isi dua kotak di bawah ini persis seperti namanya di foto Agora Console kamu, lalu tekan Simpan &amp; Aktifkan. Keduanya hanya dikirim ke backend token server yang sedang jalan (mis. di komputermu), disimpan di memori server saja, tidak disimpan di file, tidak ditulis ke log, dan hilang saat server dimatikan. Jangan kirim isinya lewat chat.</p>
+    <label for="appIdInput">App ID</label>
+    <input id="appIdInput" placeholder="Tempel App ID dari Agora Console (32 karakter)" autocomplete="off" spellcheck="false" />
+    <label for="certInput">Certificate</label>
+    <input id="certInput" type="password" placeholder="Tekan Reveal di Agora Console, lalu tempel Certificate di sini (32 karakter)" autocomplete="off" spellcheck="false" />
+    <button class="gen" id="saveConfigBtn" type="button" style="margin-top:14px">Simpan &amp; Aktifkan</button>
+    <p class="note" id="configStatus">Belum diisi. Kalau backend belum jalan, tombol ini akan gagal dengan pesan backend tidak terjangkau — itu artinya jalankan dulu python3 app.py di komputer, lalu buka http://localhost:5003.</p>
+  </section>
+
+  <section>
     <h2 style="margin:0 0 4px">Status server <span id="healthBadge" class="badge warn">mengecek…</span></h2>
     <p class="note" id="healthText">Memeriksa backend token server…</p>
     <label for="backendUrl">URL backend token server <span style="font-weight:500;color:var(--soft)">(kosongkan = server yang sama dengan halaman ini, mis. http://localhost:5003)</span></label>
@@ -123,6 +134,22 @@
   function showErr(m){errBox.textContent=m;errBox.classList.add("show")} function hideErr(){errBox.classList.remove("show");errBox.textContent=""}
   function backendBase(){var v=$("backendUrl").value.trim();if(v) return v.replace(/\/+$/,""); return "";}
   function api(path){return backendBase()+path}
+  var saveBtn=$("saveConfigBtn");
+  if(saveBtn){saveBtn.addEventListener("click",function(){
+    var appId=$("appIdInput").value.trim(), cert=$("certInput").value.trim();
+    if(!appId||!cert){$("configStatus").textContent="Isi App ID dan Certificate, keduanya wajib.";return}
+    saveBtn.disabled=true;saveBtn.textContent="Menyimpan…";
+    fetch(api("/api/config"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:appId,certificate:cert})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d}})}).then(function(x){
+      if(!x.ok)throw new Error(x.d.error||"Gagal menyimpan.");
+      $("configStatus").textContent="Aktif! "+(x.d.message||"");
+      log("Pengaturan Agora aktif — App ID dan Certificate sudah disimpan di memori server.");
+      checkHealth();
+    }).catch(function(e){
+      var m=e&&e.message?e.message:String(e);
+      if(/Failed to fetch/i.test(m))m+=" — Backend belum jalan. Jalankan dulu python3 app.py di komputer, lalu buka http://localhost:5003 (bukan link GitHub Pages).";
+      $("configStatus").textContent="Gagal: "+m;
+    }).finally(function(){saveBtn.disabled=false;saveBtn.textContent="Simpan & Aktifkan";});
+  });}
   function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
 
   var modeDescs={
