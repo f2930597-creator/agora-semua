@@ -46,18 +46,16 @@
   <div class="warn"><strong>Jujur dulu:</strong> panggilan / siaran hanya bisa dimulai kalau token server sudah dikonfigurasi dengan App ID + Sertifikat Agora kamu di server (environment variable, bukan di chat, bukan di file ini). Kalau belum, halaman ini akan menampilkan <strong>“token server belum dikonfigurasi”</strong> dan tidak akan menampilkan panggilan palsu. Untuk <strong>AI Percakapan</strong>, agen AI yang benar-benar bisa bicara butuh LLM + TTS/STT tambahan di luar Agora RTC — di versi ini AI membalas lewat teks (kalau kunci LLM sudah diisi di server) dan dibacakan oleh suara browser di HP kamu, jadi statusnya terlihat jelas di bawah.</div>
 
   <section>
-    <h2 style="margin:0 0 4px">Pengaturan Agora — samakan namanya dengan Agora Console</h2>
-    <p class="note">Isi dua kotak di bawah ini persis seperti namanya di foto Agora Console kamu, lalu tekan Simpan &amp; Aktifkan. Keduanya hanya dikirim ke backend token server yang sedang jalan (mis. di komputermu), disimpan di memori server saja, tidak disimpan di file, tidak ditulis ke log, dan hilang saat server dimatikan. Jangan kirim isinya lewat chat.</p>
-    <label for="appIdInput">App ID</label>
-    <input id="appIdInput" placeholder="Tempel App ID dari Agora Console (32 karakter)" autocomplete="off" spellcheck="false" />
-    <label for="certInput">Certificate</label>
-    <input id="certInput" type="password" placeholder="Tekan Reveal di Agora Console, lalu tempel Certificate di sini (32 karakter)" autocomplete="off" spellcheck="false" />
-    <label for="tempToken">Token Sementara (opsional — cara pakai tanpa backend, langsung dari web ini)</label>
-    <textarea id="tempToken" placeholder="Tempel Token Sementara dari Agora Console di sini (diawali 006…, berlaku 24 jam)" autocomplete="off" spellcheck="false" style="min-height:70px;font-family:ui-monospace,monospace;font-size:13px"></textarea>
-    <p class="note"><strong>Cara dapat Token Sementara:</strong> buka console.agora.io → Proyek Default → cari menu pembuatan Token Sementara / Temp RTC Token → isi nama channel yang sama dengan kolom channel di bawah (mis. ruang-utama) → salin token yang dihasilkan ke kotak ini. Token ini hanya berlaku 24 jam dan hanya untuk channel itu. Kalau kotak ini diisi, tombol Gabung akan memakai token ini langsung, tanpa perlu backend. Kalau kosong, tombol Gabung memakai backend seperti biasa.</p>
+    <h2 style="margin:0 0 4px">API Key</h2>
+    <p class="note">Cukup isi satu kolom ini saja, tidak perlu App ID atau yang lain. Tempel <strong>API Key</strong> kamu di sini, lalu tekan Simpan &amp; Aktifkan. Key ini hanya dipakai di tab ini untuk bergabung ke panggilan, tidak disimpan di file dan tidak ditulis ke log.</p>
+    <label for="apiKeyInput">API Key</label>
+    <input id="apiKeyInput" placeholder="Tempel API Key kamu di sini" autocomplete="off" spellcheck="false" />
+    <p class="note">Yang bisa dimasukkan ke kolom ini: <strong>Token Sementara</strong> dari Agora Console (diawali 006…, berlaku 24 jam, untuk channel yang sama) — ini yang paling gampang dan langsung bisa dipakai dari web ini. Kalau yang kamu tempel adalah App ID (32 karakter), web akan mencoba bergabung tanpa token; kalau proyek kamu memang butuh token, web akan memberitahu kamu untuk memakai Token Sementara di atas.</p>
     <button class="gen" id="saveConfigBtn" type="button" style="margin-top:14px">Simpan &amp; Aktifkan</button>
-    <p class="note" id="configStatus">Belum diisi. Kalau backend belum jalan, tombol ini akan gagal dengan pesan backend tidak terjangkau — itu artinya jalankan dulu python3 app.py di komputer, lalu buka http://localhost:5003.</p>
+    <p class="note" id="configStatus">Belum diisi. Isi API Key di atas, lalu tekan Simpan &amp; Aktifkan.</p>
   </section>
+
+
 
   <section>
     <h2 style="margin:0 0 4px">Status server <span id="healthBadge" class="badge warn">mengecek…</span></h2>
@@ -132,26 +130,21 @@
   var $=function(id){return document.getElementById(id)};
   var logEl=$("log"), errBox=$("errBox"), grid=$("videoGrid");
   var mode="ai", liveRole="host", client=null, localAudio=null, localVideo=null, joined=false, uid=0, speakReply=true;
+  var EMBEDDED_APP_ID="c3b774c60d7748eb8b893d040e3393a3"; // App ID proyek Agora user (identifier publik, bukan Sertifikat rahasia)
   function now(){var d=new Date();function p(n){return(n<10?"0":"")+n}return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())}
   function log(m){var div=document.createElement("div");div.textContent=now()+"  "+m;if(logEl.textContent.indexOf("Siap.")!==-1)logEl.innerHTML="";logEl.appendChild(div);logEl.scrollTop=logEl.scrollHeight}
   function showErr(m){errBox.textContent=m;errBox.classList.add("show")} function hideErr(){errBox.classList.remove("show");errBox.textContent=""}
   function backendBase(){var v=$("backendUrl").value.trim();if(v) return v.replace(/\/+$/,""); return "";}
   function api(path){return backendBase()+path}
+  var apiKeyValue="";
   var saveBtn=$("saveConfigBtn");
   if(saveBtn){saveBtn.addEventListener("click",function(){
-    var appId=$("appIdInput").value.trim(), cert=$("certInput").value.trim();
-    if(!appId||!cert){$("configStatus").textContent="Isi App ID dan Certificate, keduanya wajib.";return}
-    saveBtn.disabled=true;saveBtn.textContent="Menyimpan…";
-    fetch(api("/api/config"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:appId,certificate:cert})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d}})}).then(function(x){
-      if(!x.ok)throw new Error(x.d.error||"Gagal menyimpan.");
-      $("configStatus").textContent="Aktif! "+(x.d.message||"");
-      log("Pengaturan Agora aktif — App ID dan Certificate sudah disimpan di memori server.");
-      checkHealth();
-    }).catch(function(e){
-      var m=e&&e.message?e.message:String(e);
-      if(/Failed to fetch/i.test(m))m+=" — Backend belum jalan. Jalankan dulu python3 app.py di komputer, lalu buka http://localhost:5003 (bukan link GitHub Pages).";
-      $("configStatus").textContent="Gagal: "+m;
-    }).finally(function(){saveBtn.disabled=false;saveBtn.textContent="Simpan & Aktifkan";});
+    var k=$("apiKeyInput").value.trim();
+    if(!k){$("configStatus").textContent="Isi API Key dulu.";return}
+    apiKeyValue=k;
+    $("configStatus").textContent="Aktif! API Key sudah disimpan di memori tab ini saja (tidak di file, tidak di server). Sekarang pilih mode, isi channel, lalu tekan Gabung / Mulai.";
+    log("API Key sudah diisi di tab ini.");
+    checkHealth();
   });}
   function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
 
@@ -213,25 +206,20 @@
     if(!channel){showErr("Isi nama channel / ruangan dulu.");return}
     uid=Math.floor(Math.random()*900000)+100000;
     var role=(mode==="live"&&liveRole==="audience")?"subscriber":"publisher";
-    var tempToken=$("tempToken")?$("tempToken").value.trim():"";
+    var apiKey=apiKeyValue||($("apiKeyInput")?$("apiKeyInput").value.trim():"");
+    if(!apiKey){showErr("Isi API Key dulu di bagian atas, lalu tekan Simpan & Aktifkan.");return}
     var appId=null, data=null;
-    if(tempToken){
-      appId=$("appIdInput").value.trim();
-      if(!appId){showErr("Token Sementara sudah diisi, tapi App ID di atas masih kosong. Isi App ID dulu (kotak pertama di Pengaturan Agora).");return}
-      data={token:tempToken, appId:appId};
-      log("Memakai Token Sementara dari Agora Console (tanpa backend) untuk channel "+channel+"…");
+    if(apiKey.indexOf("006")==0){
+      appId=EMBEDDED_APP_ID;
+      data={token:apiKey, appId:appId};
+      log("Memakai API Key (Token Sementara) untuk channel "+channel+"…");
+    } else if(/^[0-9a-fA-F]{32}$/.test(apiKey)){
+      appId=apiKey;
+      data={token:null, appId:appId};
+      log("Memakai API Key sebagai App ID untuk channel "+channel+" (tanpa token)…");
     } else {
-      var tokenUrl=api("/api/token?channel="+encodeURIComponent(channel)+"&uid="+uid+"&role="+role);
-      log("Meminta token RTC untuk channel "+channel+"…");
-      var res;
-      try{res=await fetch(tokenUrl); data=await res.json();}
-      catch(e){showErr("Backend token server tidak terjangkau dan Token Sementara juga kosong. Isi Token Sementara di atas, ATAU jalankan dulu: python3 app.py, lalu buka http://localhost:5003.");log("Gagal meminta token: backend tidak terjangkau.");return}
-      if(!res.ok||!data.token){
-        var msg=(data&&data.error)||"Gagal mendapatkan token.";
-        if(data&&data.detail) msg+="\n"+data.detail;
-        showErr(msg+"\n\nAlternatif yang bisa langsung dipakai: isi Token Sementara di atas (dari Agora Console), lalu tekan Gabung lagi."); log("Gagal meminta token: "+(data&&data.error||res.status)); return;
-      }
-      appId=data.appId;
+      showErr("API Key tidak dikenali. Tempel Token Sementara (diawali 006…) atau App ID (32 karakter) di kolom API Key.");
+      return;
     }
     var useVideo=(mode==="video"||mode==="group"||(mode==="live"&&liveRole==="host"));
     var useAudio=true;
