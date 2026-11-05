@@ -52,6 +52,9 @@
     <input id="appIdInput" placeholder="Tempel App ID dari Agora Console (32 karakter)" autocomplete="off" spellcheck="false" />
     <label for="certInput">Certificate</label>
     <input id="certInput" type="password" placeholder="Tekan Reveal di Agora Console, lalu tempel Certificate di sini (32 karakter)" autocomplete="off" spellcheck="false" />
+    <label for="tempToken">Token Sementara (opsional — cara pakai tanpa backend, langsung dari web ini)</label>
+    <textarea id="tempToken" placeholder="Tempel Token Sementara dari Agora Console di sini (diawali 006…, berlaku 24 jam)" autocomplete="off" spellcheck="false" style="min-height:70px;font-family:ui-monospace,monospace;font-size:13px"></textarea>
+    <p class="note"><strong>Cara dapat Token Sementara:</strong> buka console.agora.io → Proyek Default → cari menu pembuatan Token Sementara / Temp RTC Token → isi nama channel yang sama dengan kolom channel di bawah (mis. ruang-utama) → salin token yang dihasilkan ke kotak ini. Token ini hanya berlaku 24 jam dan hanya untuk channel itu. Kalau kotak ini diisi, tombol Gabung akan memakai token ini langsung, tanpa perlu backend. Kalau kosong, tombol Gabung memakai backend seperti biasa.</p>
     <button class="gen" id="saveConfigBtn" type="button" style="margin-top:14px">Simpan &amp; Aktifkan</button>
     <p class="note" id="configStatus">Belum diisi. Kalau backend belum jalan, tombol ini akan gagal dengan pesan backend tidak terjangkau — itu artinya jalankan dulu python3 app.py di komputer, lalu buka http://localhost:5003.</p>
   </section>
@@ -210,17 +213,26 @@
     if(!channel){showErr("Isi nama channel / ruangan dulu.");return}
     uid=Math.floor(Math.random()*900000)+100000;
     var role=(mode==="live"&&liveRole==="audience")?"subscriber":"publisher";
-    var tokenUrl=api("/api/token?channel="+encodeURIComponent(channel)+"&uid="+uid+"&role="+role);
-    log("Meminta token RTC untuk channel "+channel+"…");
-    var res, data;
-    try{res=await fetch(tokenUrl); data=await res.json();}
-    catch(e){showErr("Backend token server tidak terjangkau. Jalankan dulu: python3 app.py, lalu buka http://localhost:5003.");log("Gagal meminta token: backend tidak terjangkau.");return}
-    if(!res.ok||!data.token){
-      var msg=(data&&data.error)||"Gagal mendapatkan token.";
-      if(data&&data.detail) msg+="\n"+data.detail;
-      showErr(msg); log("Gagal meminta token: "+(data&&data.error||res.status)); return;
+    var tempToken=$("tempToken")?$("tempToken").value.trim():"";
+    var appId=null, data=null;
+    if(tempToken){
+      appId=$("appIdInput").value.trim();
+      if(!appId){showErr("Token Sementara sudah diisi, tapi App ID di atas masih kosong. Isi App ID dulu (kotak pertama di Pengaturan Agora).");return}
+      data={token:tempToken, appId:appId};
+      log("Memakai Token Sementara dari Agora Console (tanpa backend) untuk channel "+channel+"…");
+    } else {
+      var tokenUrl=api("/api/token?channel="+encodeURIComponent(channel)+"&uid="+uid+"&role="+role);
+      log("Meminta token RTC untuk channel "+channel+"…");
+      var res;
+      try{res=await fetch(tokenUrl); data=await res.json();}
+      catch(e){showErr("Backend token server tidak terjangkau dan Token Sementara juga kosong. Isi Token Sementara di atas, ATAU jalankan dulu: python3 app.py, lalu buka http://localhost:5003.");log("Gagal meminta token: backend tidak terjangkau.");return}
+      if(!res.ok||!data.token){
+        var msg=(data&&data.error)||"Gagal mendapatkan token.";
+        if(data&&data.detail) msg+="\n"+data.detail;
+        showErr(msg+"\n\nAlternatif yang bisa langsung dipakai: isi Token Sementara di atas (dari Agora Console), lalu tekan Gabung lagi."); log("Gagal meminta token: "+(data&&data.error||res.status)); return;
+      }
+      appId=data.appId;
     }
-    var appId=data.appId;
     var useVideo=(mode==="video"||mode==="group"||(mode==="live"&&liveRole==="host"));
     var useAudio=true;
     try{
