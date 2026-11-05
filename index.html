@@ -315,6 +315,24 @@
     }
     aiAdd("Agen",data.reply,"ai");aiSay(data.reply);
   });
+  // --- Fitur Voice + Chat AI: bicara ke AI, AI membalas dengan suara ---
+  var voiceBtn=$("aiVoiceBtn");
+  if(voiceBtn){voiceBtn.addEventListener("click",function(){
+    var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){aiAdd("Agen","Browser ini tidak mendukung pengenalan suara. Pakai Chrome di HP / komputer untuk fitur Bicara ke AI.","ai");return}
+    var rec=new SR();
+    rec.lang="id-ID"; rec.interimResults=false; rec.maxAlternatives=1;
+    voiceBtn.disabled=true; voiceBtn.textContent="🎤 Mendengarkan… bicara sekarang";
+    rec.onresult=function(ev){
+      var text=ev.results[0][0].transcript||"";
+      aiAdd("Saya (suara)",text,"me");
+      $("aiInput").value=text;
+      $("aiSendBtn").click();
+    };
+    rec.onerror=function(ev){aiAdd("Agen","Gagal mendengarkan suara: "+(ev.error||"tidak diketahui")+". Coba lagi, pastikan izin mic diizinkan di browser.","ai");};
+    rec.onend=function(){voiceBtn.disabled=false; voiceBtn.textContent="🎤 Bicara ke AI";};
+    try{rec.start()}catch(e){voiceBtn.disabled=false; voiceBtn.textContent="🎤 Bicara ke AI"; aiAdd("Agen","Tidak bisa memulai mic: "+e.message,"ai");}
+  });}
 })();
 </script>
 </body>
