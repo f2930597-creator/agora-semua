@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agora Semua — AI, Suara, Video, Grup, Live</title>
+<script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.23.0.js"></script>
+<style>
+  :root{--bg:#0f1115;--card:#1a1d24;--ink:#f2f2f2;--soft:#a8adb8;--line:#2c303a;--acc:#00c2a8;--bad:#ff6b6b;--warn:#ffb020;--ok:#4ade80}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;line-height:1.5}
+  .wrap{max-width:960px;margin:0 auto;padding:20px 16px 60px}
+  h1{font-size:26px;margin:0} .sub{color:var(--soft)}
+  section{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-top:18px}
+  label{display:block;font-weight:600;font-size:14px;margin:14px 0 6px} label:first-child{margin-top:0}
+  input,select,textarea{width:100%;font:inherit;font-size:15px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#0f1115;color:var(--ink)}
+  textarea{min-height:70px;resize:vertical}
+  .modes{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .modes button{padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:#0f1115;color:var(--ink);font:inherit;font-weight:700;cursor:pointer}
+  .modes button.sel{background:var(--acc);color:#04211c;border-color:var(--acc)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px} @media(max-width:560px){.row{grid-template-columns:1fr}}
+  button.gen{width:100%;margin-top:16px;padding:14px;background:var(--acc);color:#04211c;border:0;border-radius:12px;font:inherit;font-size:17px;font-weight:800;cursor:pointer}
+  button.gen:disabled{opacity:.55;cursor:wait}
+  button.sec{padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:#0f1115;color:var(--ink);font:inherit;font-weight:700;cursor:pointer}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .note{font-size:13.5px;color:var(--soft)}
+  .warn{background:#2a2110;border:1px solid var(--warn);color:#ffd27a;border-radius:10px;padding:12px;font-size:14px;margin-top:12px}
+  .err{background:#2a1214;border:1px solid var(--bad);color:#ffb4b4;border-radius:10px;padding:12px;font-size:14px;margin-top:12px;display:none;white-space:pre-wrap;word-break:break-word}
+  .err.show{display:block}
+  .okbox{background:#0f2418;border:1px solid var(--ok);color:#b7f0c6;border-radius:10px;padding:12px;font-size:14px;margin-top:12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-top:14px}
+  .tile{background:#000;border:1px solid var(--line);border-radius:12px;aspect-ratio:16/9;overflow:hidden;position:relative}
+  .tile.audio-only{aspect-ratio:auto;min-height:90px;display:flex;align-items:center;justify-content:center;padding:12px;text-align:center}
+  .tile video{width:100%;height:100%;object-fit:cover}
+  .tile .tag{position:absolute;left:8px;bottom:8px;background:rgba(0,0,0,.65);padding:2px 8px;border-radius:8px;font-size:12px}
+  .log{font-family:ui-monospace,monospace;font-size:12.5px;background:#0f1115;border:1px solid var(--line);border-radius:10px;padding:12px;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow-y:auto}
+  .chat{max-height:240px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px}
+  .chat p{margin:6px 0} .chat .me{color:#9be8d8} .chat .ai{color:#ffd27a}
+  .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12.5px;font-weight:700}
+  .badge.ok{background:#0f2418;color:var(--ok)} .badge.bad{background:#2a1214;color:var(--bad)} .badge.warn{background:#2a2110;color:var(--warn)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Agora Semua</h1>
+  <p class="sub">Satu web untuk AI Percakapan, Panggilan Suara, Video 1-1, Video Grup, dan Siaran Langsung — semua lewat Agora RTC asli, bukan simulasi.</p>
+  <div class="warn"><strong>Jujur dulu:</strong> panggilan / siaran hanya bisa dimulai kalau token server sudah dikonfigurasi dengan App ID + Sertifikat Agora kamu di server (environment variable, bukan di chat, bukan di file ini). Kalau belum, halaman ini akan menampilkan <strong>“token server belum dikonfigurasi”</strong> dan tidak akan menampilkan panggilan palsu. Untuk <strong>AI Percakapan</strong>, agen AI yang benar-benar bisa bicara butuh LLM + TTS/STT tambahan di luar Agora RTC — di versi ini AI membalas lewat teks (kalau kunci LLM sudah diisi di server) dan dibacakan oleh suara browser di HP kamu, jadi statusnya terlihat jelas di bawah.</div>
+
+  <section>
+    <h2 style="margin:0 0 4px">Status server <span id="healthBadge" class="badge warn">mengecek…</span></h2>
+    <p class="note" id="healthText">Memeriksa backend token server…</p>
+    <label for="backendUrl">URL backend token server <span style="font-weight:500;color:var(--soft)">(kosongkan = server yang sama dengan halaman ini, mis. http://localhost:5003)</span></label>
+    <input id="backendUrl" placeholder="http://localhost:5003" autocomplete="off" spellcheck="false" />
+    <div class="row">
+      <div>
+        <label for="channel">Nama channel / ruangan</label>
+        <input id="channel" value="ruang-utama" autocomplete="off" spellcheck="false" />
+      </div>
+      <div>
+        <label for="myName">Nama kamu (tampilan saja)</label>
+        <input id="myName" value="Saya" autocomplete="off" spellcheck="false" />
+      </div>
+    </div>
+
+    <label>Pilih mode</label>
+    <div class="modes" role="radiogroup" aria-label="Mode">
+      <button type="button" class="sel" data-mode="ai">AI Percakapan</button>
+      <button type="button" data-mode="voice">Panggilan Suara</button>
+      <button type="button" data-mode="video">Video 1-1</button>
+      <button type="button" data-mode="group">Video Grup</button>
+      <button type="button" data-mode="live">Siaran Langsung</button>
+    </div>
+    <p class="note" id="modeDesc">AI Percakapan: gabung channel suara Agora, lalu chat teks dengan AI; balasan AI dibacakan oleh suara browser kalau LLM sudah dikonfigurasi di server.</p>
+
+    <div id="liveRoleBox" style="display:none">
+      <label>Peran di Siaran Langsung</label>
+      <div class="modes">
+        <button type="button" class="sel" data-live-role="host">Host (siaran, kamera + mic)</button>
+        <button type="button" data-live-role="audience">Penonton (hanya menonton)</button>
+      </div>
+    </div>
+
+    <div class="btns">
+      <button class="gen" id="joinBtn" type="button" style="flex:1">Gabung / Mulai</button>
+      <button class="sec" id="leaveBtn" type="button" disabled>Keluar</button>
+      <button class="sec" id="micBtn" type="button" disabled>Mic: Nyala</button>
+      <button class="sec" id="camBtn" type="button" disabled>Kamera: Nyala</button>
+    </div>
+    <div class="err" id="errBox"></div>
+  </section>
+
+  <section id="aiPanel">
+    <h2 style="margin:0 0 4px">AI Percakapan <span id="aiBadge" class="badge warn">mengecek…</span></h2>
+    <p class="note" id="aiText">AI di sini membalas lewat teks dan dibacakan oleh suara browser. Agen Conversational AI native Agora (LLM + TTS/STT di server Agora) belum termasuk di versi ini — itu butuh konfigurasi tambahan di luar Agora RTC.</p>
+    <div class="chat" id="aiChat"><p><strong>Agen:</strong> Halo, aku agen AI di channel ini. Tulis pesan di bawah, kalau LLM sudah dikonfigurasi aku akan membalasnya.</p></div>
+    <label for="aiInput">Tulis ke AI</label>
+    <textarea id="aiInput" placeholder="Contoh: halo, apa kabar?"></textarea>
+    <div class="btns">
+      <button class="sec" id="aiSendBtn" type="button">Kirim ke AI</button>
+      <button class="sec" id="aiSpeakBtn" type="button">Suara balasan: Nyala</button>
+    </div>
+  </section>
+
+  <section>
+    <h2 style="margin:0 0 4px">Video / Suara</h2>
+    <p class="note">Video lokal dan video orang lain yang benar-benar bergabung di channel yang sama akan muncul di sini, lewat Agora RTC.</p>
+    <div class="grid" id="videoGrid"></div>
+  </section>
+
+  <section>
+    <h2 style="margin:0 0 8px">Status</h2>
+    <div class="log" id="log">Siap. Pilih mode, isi channel, lalu tekan Gabung / Mulai.</div>
+  </section>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id)};
+  var logEl=$("log"), errBox=$("errBox"), grid=$("videoGrid");
+  var mode="ai", liveRole="host", client=null, localAudio=null, localVideo=null, joined=false, uid=0, speakReply=true;
+  function now(){var d=new Date();function p(n){return(n<10?"0":"")+n}return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())}
+  function log(m){var div=document.createElement("div");div.textContent=now()+"  "+m;if(logEl.textContent.indexOf("Siap.")!==-1)logEl.innerHTML="";logEl.appendChild(div);logEl.scrollTop=logEl.scrollHeight}
+  function showErr(m){errBox.textContent=m;errBox.classList.add("show")} function hideErr(){errBox.classList.remove("show");errBox.textContent=""}
+  function backendBase(){var v=$("backendUrl").value.trim();if(v) return v.replace(/\/+$/,""); return "";}
+  function api(path){return backendBase()+path}
+  function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+
+  var modeDescs={
+    ai:"AI Percakapan: gabung channel suara Agora, lalu chat teks dengan AI; balasan AI dibacakan oleh suara browser kalau LLM sudah dikonfigurasi di server.",
+    voice:"Panggilan Suara: hanya audio, tanpa video. Semua orang di channel yang sama bisa saling mendengar.",
+    video:"Video 1-1: audio + video, untuk dua orang di channel yang sama.",
+    group:"Video Grup: audio + video, banyak orang di channel yang sama, tampil sebagai grid.",
+    live:"Siaran Langsung: Host menyiarkan kamera + mic, Penonton hanya menonton (tidak menyiarkan)."
+  };
+  document.querySelectorAll("[data-mode]").forEach(function(b){
+    b.addEventListener("click",function(){
+      if(joined){log("Keluar dulu dari mode yang sedang berjalan sebelum ganti mode.");return}
+      mode=b.getAttribute("data-mode");
+      document.querySelectorAll("[data-mode]").forEach(function(x){x.classList.toggle("sel",x===b)});
+      $("modeDesc").textContent=modeDescs[mode];
+      $("liveRoleBox").style.display=mode==="live"?"block":"none";
+      $("aiPanel").style.display=mode==="ai"?"block":"none";
+      log("Mode dipilih: "+b.textContent);
+    });
+  });
+  document.querySelectorAll("[data-live-role]").forEach(function(b){
+    b.addEventListener("click",function(){
+      liveRole=b.getAttribute("data-live-role");
+      document.querySelectorAll("[data-live-role]").forEach(function(x){x.classList.toggle("sel",x===b)});
+    });
+  });
+  $("aiPanel").style.display="block";
+
+  function checkHealth(){
+    fetch(api("/api/health")).then(function(r){return r.json()}).then(function(d){
+      var badge=$("healthBadge");
+      if(d.agora_configured){badge.textContent="token server siap";badge.className="badge ok";$("healthText").textContent="Token server sudah dikonfigurasi. Panggilan / siaran bisa dimulai (tetap butuh izin mic / kamera di browser).";}
+      else{badge.textContent="token server belum dikonfigurasi";badge.className="badge bad";$("healthText").textContent="Token server belum dikonfigurasi: isi AGORA_APP_ID dan AGORA_APP_CERTIFICATE di environment server, lalu restart server. Tanpa itu, panggilan tidak bisa dimulai.";}
+      var aiBadge=$("aiBadge");
+      if(d.ai_configured){aiBadge.textContent="LLM terkonfigurasi";aiBadge.className="badge ok";$("aiText").textContent="LLM sudah dikonfigurasi di server. AI membalas lewat teks dan dibacakan oleh suara browser.";}
+      else{aiBadge.textContent="LLM belum dikonfigurasi";aiBadge.className="badge warn";$("aiText").textContent="LLM belum dikonfigurasi: isi OPENAI_API_KEY di environment server kalau mau AI membalas. Tanpa itu, agen AI belum bisa bicara.";}
+    }).catch(function(){
+      $("healthBadge").textContent="backend tidak terjangkau";$("healthBadge").className="badge bad";
+      $("healthText").textContent="Backend token server tidak terjangkau. Jalankan dulu: python3 app.py, lalu buka http://localhost:5003 di browser (bukan file / GitHub Pages).";
+    });
+  }
+  checkHealth();
+  $("backendUrl").addEventListener("change",checkHealth);
+
+  function addTile(id,label,audioOnly){
+    var old=document.getElementById("tile-"+id); if(old) return old;
+    var div=document.createElement("div"); div.className="tile"+(audioOnly?" audio-only":""); div.id="tile-"+id;
+    div.innerHTML="<div class='tag'>"+esc(label)+"</div>";
+    if(audioOnly){var p=document.createElement("div");p.textContent="🔊 "+label;div.appendChild(p);}
+    grid.appendChild(div); return div;
+  }
+  function removeTile(id){var el=document.getElementById("tile-"+id); if(el) el.remove();}
+
+  async function join(){
+    hideErr();
+    if(typeof AgoraRTC==="undefined"){showErr("Agora Web SDK tidak termuat. Buka halaman ini dengan internet aktif, lalu muat ulang.");return}
+    var channel=$("channel").value.trim();
+    if(!channel){showErr("Isi nama channel / ruangan dulu.");return}
+    uid=Math.floor(Math.random()*900000)+100000;
+    var role=(mode==="live"&&liveRole==="audience")?"subscriber":"publisher";
+    var tokenUrl=api("/api/token?channel="+encodeURIComponent(channel)+"&uid="+uid+"&role="+role);
+    log("Meminta token RTC untuk channel "+channel+"…");
+    var res, data;
+    try{res=await fetch(tokenUrl); data=await res.json();}
+    catch(e){showErr("Backend token server tidak terjangkau. Jalankan dulu: python3 app.py, lalu buka http://localhost:5003.");log("Gagal meminta token: backend tidak terjangkau.");return}
+    if(!res.ok||!data.token){
+      var msg=(data&&data.error)||"Gagal mendapatkan token.";
+      if(data&&data.detail) msg+="\n"+data.detail;
+      showErr(msg); log("Gagal meminta token: "+(data&&data.error||res.status)); return;
+    }
+    var appId=data.appId;
+    var useVideo=(mode==="video"||mode==="group"||(mode==="live"&&liveRole==="host"));
+    var useAudio=true;
+    try{
+      client=AgoraRTC.createClient({mode:mode==="live"?"live":"rtc",codec:"vp8"});
+      if(mode==="live"){await client.setClientRole(liveRole);}
+      client.on("user-published",async function(user,mediaType){
+        await client.subscribe(user,mediaType);
+        log("Pengguna "+user.uid+" bergabung ("+mediaType+").");
+        if(mediaType==="video"){
+          var tile=addTile("remote-"+user.uid,"Pengguna "+user.uid,false);
+          user.videoTrack.play(tile);
+        }
+        if(mediaType==="audio"){user.audioTrack.play();addTile("remote-audio-"+user.uid,"Suara "+user.uid,true);}
+      });
+      client.on("user-unpublished",function(user){removeTile("remote-"+user.uid);removeTile("remote-audio-"+user.uid);});
+      client.on("user-left",function(user){removeTile("remote-"+user.uid);removeTile("remote-audio-"+user.uid);log("Pengguna "+user.uid+" keluar.");});
+      await client.join(appId,channel,data.token,uid);
+      joined=true;
+      if(useAudio&&role==="publisher"){
+        localAudio=await AgoraRTC.createMicrophoneAudioTrack();
+        await client.publish(localAudio);
+        addTile("local-audio","Saya ("+esc($("myName").value||"Saya")+") — mic",true);
+      }
+      if(useVideo&&role==="publisher"){
+        localVideo=await AgoraRTC.createCameraVideoTrack();
+        await client.publish(localVideo);
+        var lt=addTile("local","Saya — kamera",false);
+        localVideo.play(lt);
+      }
+      if(role==="subscriber"){log("Bergabung sebagai penonton — menonton siaran di channel "+channel+".");}
+      else{log("Terhubung ke Agora RTC — channel "+channel+", mode "+mode+", UID "+uid+".");}
+      $("joinBtn").disabled=true;$("leaveBtn").disabled=false;$("micBtn").disabled=false;$("camBtn").disabled=!useVideo;
+      $("micBtn").textContent="Mic: Nyala";$("camBtn").textContent="Kamera: Nyala";
+    }catch(err){
+      var m=err&&err.message?err.message:String(err);
+      showErr("Gagal bergabung ke Agora: "+m+"\nBiasanya karena izin mic / kamera ditolak browser, atau token / channel tidak valid.");
+      log("Gagal bergabung: "+m);
+      await leave(true);
+    }
+  }
+  async function leave(silent){
+    try{
+      if(localAudio){localAudio.close();localAudio=null}
+      if(localVideo){localVideo.close();localVideo=null}
+      if(client){await client.leave();client=null}
+    }catch(e){}
+    joined=false; grid.innerHTML="";
+    $("joinBtn").disabled=false;$("leaveBtn").disabled=true;$("micBtn").disabled=true;$("camBtn").disabled=true;
+    if(!silent) log("Keluar dari channel.");
+  }
+  $("joinBtn").addEventListener("click",join);
+  $("leaveBtn").addEventListener("click",function(){leave(false)});
+  $("micBtn").addEventListener("click",async function(){
+    if(!localAudio) return;
+    var muted=await localAudio.getMuted();
+    await localAudio.setMuted(!muted);
+    $("micBtn").textContent=muted?"Mic: Nyala":"Mic: Mati";
+  });
+  $("camBtn").addEventListener("click",async function(){
+    if(!localVideo) return;
+    var muted=await localVideo.getMuted();
+    await localVideo.setMuted(!muted);
+    $("camBtn").textContent=muted?"Kamera: Nyala":"Kamera: Mati";
+  });
+
+  // AI chat (teks) — suara balasan dibacakan browser (SpeechSynthesis)
+  function aiSay(text){
+    if(!speakReply) return;
+    try{var u=new SpeechSynthesisUtterance(text);u.lang="id-ID";speechSynthesis.cancel();speechSynthesis.speak(u);}catch(e){}
+  }
+  function aiAdd(who,text,cls){
+    var p=document.createElement("p");p.className=cls||"";p.innerHTML="<strong>"+esc(who)+":</strong> "+esc(text);
+    $("aiChat").appendChild(p);$("aiChat").scrollTop=$("aiChat").scrollHeight;
+  }
+  $("aiSpeakBtn").addEventListener("click",function(){
+    speakReply=!speakReply;
+    $("aiSpeakBtn").textContent=speakReply?"Suara balasan: Nyala":"Suara balasan: Mati";
+    if(!speakReply){try{speechSynthesis.cancel()}catch(e){}}
+  });
+  $("aiSendBtn").addEventListener("click",async function(){
+    var msg=$("aiInput").value.trim();
+    if(!msg){return}
+    aiAdd("Saya",msg,"me");$("aiInput").value="";
+    var res,data;
+    try{res=await fetch(api("/api/ai/chat"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:msg})});data=await res.json();}
+    catch(e){aiAdd("Agen","Backend tidak terjangkau. Jalankan dulu python3 app.py.","ai");return}
+    if(!res.ok||!data.reply){
+      aiAdd("Agen",(data&&data.error)||"Gagal menghubungi AI.","ai");
+      if(data&&data.detail) aiAdd("Agen",data.detail,"ai");
+      log("AI belum bisa membalas: "+(data&&data.error||res.status));
+      return;
+    }
+    aiAdd("Agen",data.reply,"ai");aiSay(data.reply);
+  });
+})();
+</script>
+</body>
+</html>
