@@ -175,16 +175,27 @@
   $("aiPanel").style.display="block";
 
   function checkHealth(){
+    // Kalau API Key (Token Sementara / App ID) sudah diisi, backend TIDAK diperlukan lagi - jangan tampilkan "tidak terjangkau" sebagai error.
+    if(apiKeyValue){
+      $("healthBadge").textContent="siap dipakai — tanpa backend";$("healthBadge").className="badge ok";
+      $("healthText").textContent="Siap dipakai dengan API Key yang sudah kamu isi. Backend token server tidak diperlukan untuk cara ini, jadi abaikan tulisan backend di bawah. Pilih mode, isi channel, lalu tekan Gabung / Mulai.";
+      return;
+    }
     fetch(api("/api/health")).then(function(r){return r.json()}).then(function(d){
       var badge=$("healthBadge");
       if(d.agora_configured){badge.textContent="token server siap";badge.className="badge ok";$("healthText").textContent="Token server sudah dikonfigurasi. Panggilan / siaran bisa dimulai (tetap butuh izin mic / kamera di browser).";}
-      else{badge.textContent="token server belum dikonfigurasi";badge.className="badge bad";$("healthText").textContent="Token server belum dikonfigurasi: isi AGORA_APP_ID dan AGORA_APP_CERTIFICATE di environment server, lalu restart server. Tanpa itu, panggilan tidak bisa dimulai.";}
+      else{badge.textContent="token server belum dikonfigurasi";badge.className="badge bad";$("healthText").textContent="Token server belum dikonfigurasi. Isi API Key di atas (Token Sementara / App ID) untuk pakai web ini tanpa backend, ATAU isi AGORA_APP_ID dan AGORA_APP_CERTIFICATE di environment server, lalu restart server.";}
       var aiBadge=$("aiBadge");
       if(d.ai_configured){aiBadge.textContent="LLM terkonfigurasi";aiBadge.className="badge ok";$("aiText").textContent="LLM sudah dikonfigurasi di server. AI membalas lewat teks dan dibacakan oleh suara browser.";}
       else{aiBadge.textContent="LLM belum dikonfigurasi";aiBadge.className="badge warn";$("aiText").textContent="LLM belum dikonfigurasi: isi OPENAI_API_KEY di environment server kalau mau AI membalas. Tanpa itu, agen AI belum bisa bicara.";}
     }).catch(function(){
-      $("healthBadge").textContent="backend tidak terjangkau";$("healthBadge").className="badge bad";
-      $("healthText").textContent="Backend token server tidak terjangkau. Jalankan dulu: python3 app.py, lalu buka http://localhost:5003 di browser (bukan file / GitHub Pages).";
+      if(apiKeyValue){
+        $("healthBadge").textContent="siap dipakai — tanpa backend";$("healthBadge").className="badge ok";
+        $("healthText").textContent="Siap dipakai dengan API Key yang sudah kamu isi. Backend tidak diperlukan untuk cara ini.";
+        return;
+      }
+      $("healthBadge").textContent="backend tidak terjangkau — pakai API Key di atas saja";$("healthBadge").className="badge warn";
+      $("healthText").textContent="Backend token server tidak terjangkau dari web ini, tapi itu bukan halangan: isi API Key (Token Sementara) di atas, lalu tekan Gabung. Backend hanya diperlukan kalau mau token dibuat otomatis oleh server (python3 app.py, lalu buka http://localhost:5003).";
     });
   }
   checkHealth();
